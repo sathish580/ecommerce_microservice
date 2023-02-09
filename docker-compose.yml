@@ -1,0 +1,202 @@
+version: "3.9"
+
+volumes:
+  rabbitmq_data:
+
+services:
+ 
+  # ###################################
+  # # Product: The Product microservice
+  # ###################################
+  # product:
+  #   build:
+  #     context: ./
+  #     dockerfile: product.Dockerfile
+  #   image: sathishkm580/product:esd
+  #   restart: always
+  #   environment:
+  #     # dbURL: mysql+mysqlconnector://is213@host.docker.internal:3308/product
+  #     PYTHONUNBUFFERED: 1
+ 
+  #######################################################
+  # Image_to_keyword: The Image to keyword microservice
+  #######################################################
+  image_to_keyword:
+    build:
+      context: ./
+      dockerfile: Image_To_Keyword/Dockerfile
+    image: sathishkm580/image_to_keyword:esd
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "5003:5003"
+
+  #######################################################
+  # Payment: The Payment microservice
+  #######################################################
+  payment:
+    build:
+      context: ./
+      dockerfile: Payment/Dockerfile
+    image: sathishkm580/payment:esd
+    restart: always
+    depends_on:
+      - rabbitmq
+      
+    environment:
+      rabbit_host: rabbitmq
+      rabbit_port: 5672
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "5001:5001"
+
+  #######################################################
+  # Pricewatching: The Pricewatching microservice
+  #######################################################
+  pricewatching:
+    build:
+      context: ./
+      dockerfile: Pricewatching/Dockerfile
+    image: sathishkm580/pricewatching:esd
+    restart: always
+    environment:
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "5002:5002"
+
+  ####################################
+  # RabbitMQ: The messaging broker   
+  ####################################
+  rabbitmq:
+    image: rabbitmq:3-management
+    hostname: esd-rabbit
+    restart: always
+    ports:
+      - "5672"
+      - "15672"
+    volumes: 
+      - rabbitmq_data:/var/lib/rabbitmq
+      
+  #################################################
+  # Email_Notification: The Email Notification microservice
+  #################################################
+  email_notification:
+    build:
+      context: ./
+      dockerfile: Email/Dockerfile
+    image: sathishkm580/email_notification:esd
+    restart: always
+    depends_on:
+      - rabbitmq
+    environment:
+      rabbit_host: rabbitmq
+      rabbit_port: 5672
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "5400:5400"
+
+
+# end of messaging broker
+
+  # ###############################################
+  # # Place_Order: The Place Order microservice
+  # ###############################################
+  # place_order:
+  #   build:
+  #     context: ./Place_Order
+  #     dockerfile: place_order.Dockerfile
+  #   image: sathishkm580/place_order:esd
+  #   restart: always
+  #   depends_on:
+  #     - product
+  #     - payment
+  #     - shipping_record
+  #   environment:
+  #     rabbit_host: rabbitmq
+  #     rabbit_port: 5672
+  #     order_URL: http://order:5002/payment
+  #     shipping_record_URL: http://shipping_record:5003/shipping_record 
+  #     PYTHONUNBUFFERED: 1
+  #   ports:
+  #     - "5100:5100"
+
+  ###############################################
+  # Search_By_Image: The Search By Image microservice
+  ###############################################
+  search_by_image:
+    build:
+      context: ./
+      dockerfile: Search_By_Image/Dockerfile
+    image: sathishkm580/search_by_image:esd
+    restart: always
+    depends_on:
+      - product
+      - image_to_keyword
+    environment:
+      PYTHONUNBUFFERED: 1
+      product_URL: "http://product:5000/getallproducts"
+      imageToKeyword_URL: "http://image_to_keyword:5003/getkeyword"
+    ports:
+      - "5300:5300"  
+
+  ###############################################
+  # Change_Price: The Change Price microservice
+  ###############################################
+  change_price:
+    build:
+      context: ./
+      dockerfile: PriceChange/Dockerfile
+    image: sathishkm580/change_price:esd
+    restart: always
+    depends_on:
+      - product
+      - email_pricewatchers
+    environment:
+      email_pricewatchers_URL: http://email_pricewatchers:5200/email_pricewatchers  
+      product_URL: http://product:5000/product  
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "5100:5100"
+
+  ###############################################
+  # Email_Pricewatchers: The Email Pricewatchers microservice
+  ###############################################
+  email_pricewatchers:
+    build:
+      context: ./
+      dockerfile: EmailPricewatcher/Dockerfile
+    image: sathishkm580/email_pricewatchers:esd
+    restart: always
+    depends_on:
+      - pricewatching
+      - rabbitmq
+      - email_notification
+    environment:
+      rabbit_host: rabbitmq
+      rabbit_port: 5672
+      pricewatching_URL: http://pricewatching:5002/pricewatching 
+      email_notification_URL: http://email_notification:5400/sendgrid
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "5200:5200"
+
+
+# end of complex ms
+
+
+
+  ##################################
+  # Product: The Product microservice
+  ##################################
+  product:
+    build:
+      context: ./
+      dockerfile: Product/Dockerfile
+    image: sathishkm580/product:esd
+    restart: always
+    environment:
+      dbURL: mysql+mysqlconnector://is213@host.docker.internal:5000/product
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "5000:5000"

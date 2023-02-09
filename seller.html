@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <!-- Bootstrap CSS -->
+    <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css'
+       rel='stylesheet'
+       integrity='sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC'
+       crossorigin='anonymous'>
+ 
+    <!-- Bootstrap Icons: https://icons.getbootstrap.com/ -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    
+    <!-- Latest compiled and minified JavaScript -->
+    <script
+       src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+
+
+</head>
+<body>
+    <div>
+        <!-- Navigation bar -->
+        <nav class="navbar navbar-dark bg-primary">
+            <div class="container-fluid">
+                <a class="navbar-brand h1" href="index.html">
+                    <i width="30" height="30" class="me-1 d-inline-block align-text-top bi bi-shop-window"></i>
+                    Marketplace
+                  </a>
+              <form class="d-flex">
+                <input class="form-control me-2" type="search" id="userSearchInput" placeholder="Search products" aria-label="Search" >
+                <button class="btn btn-outline-light" type="button" onclick="searchProduct()"><i class="bi bi-search"></i></button>
+                <button class="ms-2 btn btn-outline-light" type="button" data-bs-toggle="modal" data-bs-target="#imageSearchModal"><i class="bi bi-upload"></i></button>
+              </form>
+            </div>
+        </nav>
+        
+        <!-- Image Search Modal -->
+        <div class="modal fade" id="imageSearchModal" tabindex="-1" aria-labelledby="imageSearchModal" aria-hidden="true">
+            <div class="modal-dialog modal-sm">
+            <div class="modal-content">
+                <div class="modal-header">
+                <h5 class="modal-title" id="imageSearchModal">Search by Image</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <input class="form-control" type="file" id="myfile" onchange="loadFile(event)">
+                      </div>
+                    
+                    <img id="imgPreview" class="text-center" height="100"/>
+                </div>
+                <div class="modal-footer">
+                <button type="button" class="btn btn-dark" data-bs-dismiss="modal" onclick="getImgKeywords()">Search</button>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <!-- Product Listings -->
+        <div class="container">
+            <h2 class="mt-3">Browse Products</h2>
+            <p id="labels"></p>
+            <h6 id="reco-label"></h6>
+            <div>
+                <img src="loading.gif" height="30" id="loading" style="display:none">
+                <div id="allProducts" class="row row-cols-1 row-cols-sm-2 row-cols-md-4 g-4">
+                </div>
+            </div>
+        </div>
+
+        
+        <p id="errorMsg" style="color:red;"></p>
+        <!-- <p  style="color:green;"></p> -->
+
+    </div>
+    <script>
+
+        const searchByImageURL = "http://localhost:5100/searchimage";
+        const getProductsURL = "http://localhost:5000/getallproducts";
+        const priceChangeURL = "http://localhost:5100/price_change";
+        
+        // const place_order_URL = "http://localhost:5100/place_order";
+
+        var productList = []
+        
+        // function to display AllProducts() 
+        $(document).ready(function() {
+            getAllProducts();
+        });
+
+        // function to display cards of products
+        function displayProductCards(productList, empty){
+            if (empty){
+                document.getElementById("reco-label").innerText = "Oops...we could not find any relevant products. Here are some recommendations based on what you searched."
+            }
+            productListingEle = document.getElementById("allProducts");
+            var productListStr = ``;
+            for (oneProdObj in productList) {
+                var oneProd = productList[oneProdObj];
+                for(prodID in oneProd){
+
+                    var name = oneProd[prodID].Name
+                    var desc = oneProd[prodID].Description
+                    var price = oneProd[prodID].Price
+                    var stock = oneProd[prodID].Stock
+                    var imgUrl = oneProd[prodID].imgUrl
+                    var cardStr = `
+                    <div class="col">
+                        <div class="card h-100">
+                            <img src="${imgUrl}" class="card-img-top" height="200px" style="object-fit: contain;">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <div class="d-flex justify-content-between">
+                                        <div class="bd-highlight">${name}</div>
+                                        <div class="bd-highlight">
+                                            <span class="badge rounded-pill bg-secondary">${stock} left</span>
+                                        </div>
+                                    </div>
+                                    
+                                </h5>
+                                <p class="card-text">$${price}
+                                    <br>
+                                    <span class="text-muted">
+                                        ${desc}
+                                    </span>
+                                </p>
+                            </div>
+                            <button type="button" class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#${prodID}Modal">
+                            Edit Price
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="modal fade" id="${prodID}Modal" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="exampleModalLabel">Edit Price for ${name}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <form>
+                                    <div class="row g-3 align-items-center">
+                                        <div class="col-auto">
+                                            <label for="newProductPrice" class="col-form-label">New Price: $</label>
+                                        </div>
+                                        <div class="col-auto">
+                                            <input type="number" id="${prodID}" class="form-control" value="${price}">
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="submit" onclick="updateProductPrice(${prodID})" data-bs-dismiss="modal" class="btn btn-primary">Update price</button>
+                            </div>
+                            </div>
+                        </div>
+                    </div>
+                    `
+                }
+                productListStr += cardStr
+                
+            }
+            productListingEle.innerHTML = productListStr;
+
+            document.getElementById("loading").style.display="none";
+            document.getElementById("allProducts").style.visibility="visible";
+        }
+
+        // function to get all products
+        function getAllProducts(){
+            
+            fetch(`${getProductsURL}`,
+                    {
+                        method: "GET"
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        productList = data.data.products;
+                        displayProductCards(productList);
+                    });
+        }
+
+
+        // update product price
+        function updateProductPrice(prodEle){
+            var newPrice = parseInt(document.getElementById(prodEle.id).value);
+            data = {
+                "ProductID": prodEle.id,
+                "Price" : newPrice
+            }
+
+            url = "http://localhost:5100/price_change"
+            axios.post(url, data)
+                .then(response => {
+                        // process response.data object 
+                            console.log("Price change completed.")
+                        })
+                .catch(error => {
+                        // process error object
+                        console.log("Unable to perform price change.")
+                        });
+
+        }
+
+
+        // function to search and filter products when user uses searchbar
+        function searchProduct(){
+            document.getElementById("labels").innerText = "";
+            document.getElementById("reco-label").innerText = "";
+            var userInput = document.getElementById("userSearchInput").value.toLowerCase();
+            if (userInput != ""){
+                fetch(`${getProductsURL}`,
+                        {
+                            method: "GET"
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            productList = data.data.products;
+                            filteredList = []
+                            empty = false
+                            for (oneProdObj in productList) {
+                                var oneProd = productList[oneProdObj];
+                                for(prodID in oneProd){
+                                    var name = oneProd[prodID].Name
+                                    if (name.toLowerCase().includes(userInput)  
+                                        && filteredList.indexOf(oneProd) == -1){
+                                        filteredList.push(oneProd)
+                                    }
+                                }
+                            }
+
+                            if (filteredList.length == 0) {
+                                var singleKeywordList = userInput.split(" ")
+                                empty = true
+                                for (oneProdObj in productList) {
+                                    var oneProd = productList[oneProdObj];
+                                    for(prodID in oneProd){
+                                        var name = oneProd[prodID].Name
+                                        var desc = oneProd[prodID].Description
+                                        var prodKeywords = oneProd[prodID].Keywords
+                                        for (keyword of singleKeywordList){
+                                            if ((name.toLowerCase().includes(keyword) ||
+                                                desc.toLowerCase().includes(keyword) ||
+                                                prodKeywords.includes(keyword)) 
+                                                && filteredList.indexOf(oneProd) == -1){
+                                                filteredList.push(oneProd)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            displayProductCards(filteredList, empty);
+                            if (empty) {
+                                document.getElementById("labels").innerText = "Found 0 products matching: " + userInput;
+                            }
+                            // if user didnt enter anything in the seach bar, dont need display this sentence
+                            else if (userInput != ''){
+                                document.getElementById("labels").innerText = "Found " + filteredList.length + " products matching: " + userInput;
+                            }
+                            document.getElementById("loading").style.display="none";
+                            document.getElementById("allProducts").style.visibility="visible";
+                        })
+                ;
+
+            }
+            else{
+                getAllProducts();
+                document.getElementById("labels").innerText = "";
+            }
+
+        }
+
+        // function to load image preview in modal
+        var loadFile = function(event) {
+            var imgPreview = document.getElementById('imgPreview');
+            imgPreview.src = URL.createObjectURL(event.target.files[0]);
+            imgPreview.onload = function() {
+            URL.revokeObjectURL(imgPreview.src) // free memory
+            }
+        };
+
+        // function to get image keywords from search_by_image ms
+        function getImgKeywords(){
+            document.getElementById("loading").style.display="inline-block";
+            document.getElementById("labels").innerText = "";
+            document.getElementById("reco-label").innerText = "";
+            document.getElementById("allProducts").style.visibility="hidden";
+            var preview = document.querySelector('img');
+            var file = document.querySelector('input[type=file]').files[0];
+            var fileType = file['type'];
+            const validImageTypes = ['image/gif', 'image/jpeg', 'image/png'];
+            if (!validImageTypes.includes(fileType)) {
+                document.getElementById("errorMsg").innerHTML = 'Please upload images only.';
+            }
+            else {
+                // add image file into formData to be sent in POST request
+                var formData = new FormData();
+                formData.append("file", file)
+                if (file) {
+                    var reader = new FileReader();
+                    reader.readAsDataURL(file);
+                }
+                
+                fetch(`${searchByImageURL}`,
+                    {
+                        method: "POST",
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        products = data.data;
+                        keywords = data.keywords;
+                        if (keywords[0] != ''){
+                            document.getElementById("labels").innerText = "Found " + products.length + " products matching: " + keywords.join(", ");
+                        }
+                        displayProductCards(products, false);
+                    })
+
+            }
+        }
+
+
+
+    </script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script 
+    src='https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js'
+    integrity='sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM'
+    crossorigin='anonymous'></script>
+</body>
+</html>
